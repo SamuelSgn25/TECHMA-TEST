@@ -5,11 +5,20 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password TEXT NOT NULL,
     drive_enabled BOOLEAN DEFAULT FALSE,
-    drive_tokens JSONB, -- Stockage des tokens Google
+    drive_tokens JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table des fichiers locaux (liée à l'utilisateur)
+-- Table des dossiers (AVANT local_files car elle est référencée)
+CREATE TABLE IF NOT EXISTS local_folders (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id),
+    name VARCHAR(255) NOT NULL,
+    parent_id INTEGER REFERENCES local_folders(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table des fichiers locaux
 CREATE TABLE IF NOT EXISTS local_files (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
@@ -21,16 +30,7 @@ CREATE TABLE IF NOT EXISTS local_files (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Table des dossiers
-CREATE TABLE IF NOT EXISTS local_folders (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
-    name VARCHAR(255) NOT NULL,
-    parent_id INTEGER REFERENCES local_folders(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Historique IA (lié à l'utilisateur)
+-- Historique IA
 CREATE TABLE IF NOT EXISTS chat_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
