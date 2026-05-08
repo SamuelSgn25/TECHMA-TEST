@@ -1,11 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Paperclip, X, FileCheck } from 'lucide-react';
+import { Send, User, Bot, Paperclip, X, FileCheck, Sparkles, ArrowUp } from 'lucide-react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
 const AIChat = ({ files }) => {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Bonjour ! Je suis Drive AI. Sélectionnez un fichier ou posez-moi n'importe quelle question sur vos documents." }
+    { role: 'assistant', content: "Comment puis-je vous aider aujourd'hui ?" }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,62 +32,117 @@ const AIChat = ({ files }) => {
 
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Erreur lors de la communication avec l'IA." }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, une erreur est survenue lors de l'analyse." }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto space-y-6 pb-10 pr-2">
+    <div className="flex flex-col h-full bg-white text-slate-800">
+      {/* Zone des messages (centrée comme ChatGPT) */}
+      <div className="flex-1 overflow-y-auto w-full max-w-3xl mx-auto px-4 py-8 space-y-8">
         {messages.map((msg, idx) => (
-          <div key={idx} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${msg.role === 'user' ? 'bg-premium-accent text-white' : 'bg-white border text-premium-accent'}`}>
-              {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
+          <motion.div
+            key={idx}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex gap-5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            {msg.role === 'assistant' && (
+              <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 shrink-0">
+                <Bot size={18} className="text-premium-accent" />
+              </div>
+            )}
+            <div className={`max-w-[85%] rounded-2xl px-5 py-3 ${
+              msg.role === 'user' 
+                ? 'bg-slate-100 text-slate-900 rounded-tr-none' 
+                : 'bg-transparent border-none text-slate-700 leading-relaxed'
+            }`}>
+              {msg.role === 'assistant' && idx === 0 && <span className="font-bold block mb-2 text-premium-accent">Drive AI</span>}
+              <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
             </div>
-            <div className={msg.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}>
-              <p className="text-sm">{msg.content}</p>
-            </div>
-          </div>
+            {msg.role === 'user' && (
+              <div className="w-8 h-8 rounded-full bg-premium-dark text-white flex items-center justify-center shrink-0">
+                <User size={18} />
+              </div>
+            )}
+          </motion.div>
         ))}
-        {isLoading && <div className="text-xs text-slate-400 italic">Drive AI analyse...</div>}
+        {isLoading && (
+          <div className="flex gap-5 animate-pulse">
+            <div className="w-8 h-8 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center">
+              <Bot size={18} className="text-slate-300" />
+            </div>
+            <div className="h-10 w-24 bg-slate-50 rounded-2xl" />
+          </div>
+        )}
         <div ref={chatEndRef} />
       </div>
 
-      <div className="sticky bottom-0 bg-premium-light pt-4 pb-6">
-        {/* Sélecteur de fichier contexte */}
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {files.map(file => (
-            <button 
-              key={file.id} 
-              onClick={() => setSelectedContext(file)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all whitespace-nowrap ${
-                selectedContext?.id === file.id ? 'bg-premium-accent text-white border-premium-accent' : 'bg-white text-slate-500 border-slate-100 hover:border-premium-accent'
-              }`}
-            >
-              <FileCheck size={12} /> {file.name}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative bg-white border border-slate-200 rounded-3xl shadow-xl p-2 flex items-center">
+      {/* Barre d'input (minimaliste ChatGPT-style) */}
+      <div className="w-full max-w-3xl mx-auto px-4 pb-10">
+        <div className="relative bg-slate-50 rounded-[28px] border border-slate-200 focus-within:border-slate-300 transition-all p-2">
+          {/* Fichier de contexte attaché */}
           {selectedContext && (
-            <div className="absolute -top-12 left-0 bg-premium-accent text-white px-3 py-1 rounded-lg text-xs flex items-center gap-2">
-              <Paperclip size={12} /> {selectedContext.name}
-              <button onClick={() => setSelectedContext(null)}><X size={12} /></button>
+            <div className="absolute -top-12 left-2 flex items-center gap-2 bg-slate-900 text-white px-4 py-1.5 rounded-full text-xs animate-in slide-in-from-bottom-2">
+              <FileCheck size={14} />
+              <span className="max-w-[200px] truncate">{selectedContext.name}</span>
+              <button onClick={() => setSelectedContext(null)} className="ml-1 hover:text-red-400">
+                <X size={14} />
+              </button>
             </div>
           )}
-          <textarea
-            rows="1" placeholder="Posez votre question..."
-            className="flex-1 bg-transparent px-4 py-3 outline-none resize-none text-sm"
-            value={input} onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-          />
-          <button onClick={handleSend} className="p-3 bg-premium-accent text-white rounded-2xl hover:scale-105 active:scale-95 transition-all">
-            <Send size={18} />
-          </button>
+
+          {/* Sélecteur de contexte (bouton trombone) */}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-end gap-2 pr-2">
+              <div className="flex-1 flex flex-col">
+                <textarea
+                  rows="1"
+                  placeholder="Posez une question..."
+                  className="w-full bg-transparent px-4 py-3 focus:outline-none resize-none text-[15px] max-h-48 scrollbar-hide"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
+                />
+              </div>
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                className={`p-2.5 rounded-full transition-all ${
+                  input.trim() && !isLoading 
+                    ? 'bg-premium-dark text-white shadow-lg' 
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                <ArrowUp size={20} />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2 px-2 pb-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+              <span className="text-[10px] uppercase font-bold text-slate-400 mr-2 flex items-center gap-1">
+                <Paperclip size={12} /> Contexte :
+              </span>
+              {files.slice(0, 5).map(file => (
+                <button
+                  key={file.id}
+                  onClick={() => setSelectedContext(file)}
+                  className={`text-[11px] px-3 py-1 rounded-full border transition-all ${
+                    selectedContext?.id === file.id 
+                      ? 'bg-premium-accent text-white border-premium-accent' 
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
+                  }`}
+                >
+                  {file.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+        <p className="text-center text-[11px] text-slate-400 mt-4 flex items-center justify-center gap-1">
+          Drive AI peut faire des erreurs. Envisagez de vérifier les informations importantes.
+        </p>
       </div>
     </div>
   );
