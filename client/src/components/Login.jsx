@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff, Mail, Lock, User as UserIcon } from 'lucide-react';
 import axios from 'axios';
 
 const Login = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState('');
 
@@ -43,16 +45,30 @@ const Login = ({ onLogin }) => {
               onChange={(e) => setFormData({...formData, username: e.target.value})}
             />
           )}
-          <input
-            type="email" placeholder="Email"
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-premium-accent/20 outline-none transition-all"
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
-          />
-          <input
-            type="password" placeholder="Mot de passe"
-            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-premium-accent/20 outline-none transition-all"
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-          />
+          
+          <div className="relative">
+            <input
+              type="email" placeholder="Email"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-premium-accent/20 outline-none transition-all"
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+            />
+          </div>
+
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"} 
+              placeholder="Mot de passe"
+              className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:ring-2 focus:ring-premium-accent/20 outline-none transition-all"
+              onChange={(e) => setFormData({...formData, password: e.target.value})}
+            />
+            <button 
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-premium-accent"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
           <button className="w-full bg-premium-accent text-white py-4 rounded-xl font-bold hover:shadow-lg hover:shadow-premium-accent/30 transition-all">
             {isRegister ? "S'inscrire" : "Se connecter"}
           </button>
