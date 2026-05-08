@@ -1,51 +1,62 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const axios = require('axios');
 require('dotenv').config();
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+
+// Liste de modèles à essayer dans l'ordre (le premier qui répond gagne)
+const MODELS = [
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-pro',
+];
+
+const callGemini = async (modelName, contents) => {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+  const response = await axios.post(url, { contents }, {
+    headers: { 'Content-Type': 'application/json' },
+    timeout: 30000,
+  });
+  return response.data.candidates?.[0]?.content?.parts?.[0]?.text || "Pas de réponse.";
+};
 
 const askDriveAI = async (prompt, history, fileContext) => {
-  try {
-    // Forçage sur gemini-pro car flash-1.5 renvoie des 404 pour certains comptes
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+  // Construire l'historique au format Gemini
+  let contents = history
+    .filter(m => m.role === 'user' || m.role === 'assistant')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
 
-    let cleanedHistory = history
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }]
-      }));
-
-    while (cleanedHistory.length > 0 && cleanedHistory[0].role !== 'user') {
-      cleanedHistory.shift();
-    }
-
-    let fullPrompt = prompt;
-    if (fileContext) {
-      fullPrompt = `CONTEXTE FICHIER: ${fileContext.name}\n${prompt}`;
-    }
-
-    const chat = model.startChat({
-      history: cleanedHistory,
-    });
-
-    const result = await chat.sendMessage(fullPrompt);
-    const response = await result.response;
-    return response.text();
-  } catch (error) {
-    console.error("❌ Gemini Error:", error.message);
-    
-    // Si flash échoue, on tente le pro (fallback)
-    if (error.message.includes("404") || error.message.includes("500")) {
-      try {
-        const modelPro = genAI.getGenerativeModel({ model: "gemini-pro" });
-        const result = await modelPro.generateContent(prompt);
-        return result.response.text();
-      } catch (e) {
-        return "Erreur : Les modèles Gemini sont saturés ou votre clé API est limitée. Réessayez dans une minute.";
-      }
-    }
-    return "Une erreur est survenue lors de la communication avec l'IA.";
+  // Gemini exige que le premier message soit 'user'
+  while (contents.length > 0 && contents[0].role !== 'user') {
+    contents.shift();
   }
+
+  // Ajouter le prompt actuel avec le contexte fichier si présent
+  let fullPrompt = prompt;
+  if (fileContext) {
+    fullPrompt = `[Fichier: ${fileContext.name}]\n\n${prompt}`;
+  }
+  contents.push({ role: 'user', parts: [{ text: fullPrompt }] });
+
+  // Essayer chaque modèle jusqu'à ce qu'un fonctionne
+  for (const model of MODELS) {
+    try {
+      console.log(`🤖 Tentative avec ${model}...`);
+      const text = await callGemini(model, contents);
+      console.log(`✅ Réponse obtenue via ${model}`);
+      return text;
+    } catch (err) {
+      const status = err.response?.status;
+      const msg = err.response?.data?.error?.message || err.message;
+      console.log(`⚠️  ${model} échoué (${status}): ${msg}`);
+      // Continuer avec le modèle suivant
+    }
+  }
+
+  return "Erreur : aucun modèle Gemini n'a pu répondre. Vérifiez que votre clé API est valide et que l'API 'Generative Language' est activée dans votre console Google Cloud.";
 };
 
 module.exports = { askDriveAI };
