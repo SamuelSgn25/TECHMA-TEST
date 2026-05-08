@@ -115,6 +115,19 @@ app.get('/api/files', authMiddleware, async (req, res) => {
   }
 });
 
+// Récupérer le contenu d'un fichier texte
+app.get('/api/files/content/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await query('SELECT path FROM local_files WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (result.rows.length === 0) return res.status(404).send("Fichier non trouvé");
+    const fullPath = path.join(__dirname, result.rows[0].path);
+    const content = fs.readFileSync(fullPath, 'utf8');
+    res.send(content);
+  } catch (error) {
+    res.status(500).send("Erreur lors de la lecture du fichier");
+  }
+});
+
 app.post('/api/folders', authMiddleware, async (req, res) => {
   const { name, parentId } = req.body;
   try {
