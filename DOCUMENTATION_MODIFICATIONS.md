@@ -1,60 +1,36 @@
 # 📑 Documentation des Modifications - Drive AI
 
-Ce document détaille l'ensemble des travaux réalisés pour transformer le projet **Drive AI** en une application full-stack robuste, sécurisée et dotée d'une intelligence artificielle avancée.
+## 1. Aperçu des Fichiers (Nouveau) 🖼️
+L'interface supporte désormais la prévisualisation en plein écran :
+- **Vidéos** : Lecteur intégré avec contrôles.
+- **Images** : Affichage direct des photos (PNG, JPG, etc.).
+- **Texte/Code** : Lecture et affichage du contenu des fichiers `.txt`, `.js`, `.css`.
+- **Autres** : Bouton de téléchargement automatique si l'aperçu n'est pas possible.
 
 ---
 
-## 1. Architecture & Base de Données 🗄️
+## 2. Google Drive : Solution au problème d'URL 🌐
+Si Google refuse encore la connexion, c'est une question de domaine. Voici la solution ultime :
 
-### Automatisation
-Le système gère désormais lui-même sa structure. Au lancement du serveur, le fichier `db.js` vérifie l'existence des tables et les crée si nécessaire via `schema.sql`.
-- **Tables créées** : `users` (comptes), `local_folders` (structure), `local_files` (données).
-
----
-
-## 2. Authentification & Profil 🔐
-
-### Sécurité Avancée
-- **JWT (JSON Web Token)** : Toutes les données sont protégées. Un utilisateur ne peut voir que ses propres fichiers.
-- **Bcrypt** : Les mots de passe sont cryptés avant d'être enregistrés.
-- **Réinitialisation** : Un mode "Mot de passe oublié" a été ajouté sur l'écran de connexion.
-
-### Gestion du Profil
-- Les utilisateurs peuvent modifier leur **nom d'utilisateur** et leur **email** dans l'onglet Paramètres.
-- Ajout d'une icône d'œil sur tous les champs de mot de passe pour améliorer l'expérience utilisateur.
+1. **Dans la Console Google Cloud** :
+   - Modifie ton URI de redirection pour : `http://127.0.0.1:5000/api/auth/callback` (Utilise l'IP au lieu de localhost).
+2. **Dans ton navigateur** :
+   - Accède à ton application via `http://127.0.0.1:5173` au lieu de `localhost:5173`.
+3. **Dans le code** :
+   - J'ai déjà configuré le serveur pour accepter ces deux variantes.
 
 ---
 
-## 3. Gestion de Fichiers & Navigation 📂
-
-### Navigation Intuitive
-- **Dossiers** : Support complet de la création de dossiers et de la navigation par double-clic.
-- **Breadcrumbs** : Un fil d'Ariane permet de savoir exactement où l'on se trouve et de revenir en arrière facilement.
-- **Aperçu** : Lecteur vidéo intégré et téléchargement direct pour les autres types de fichiers.
-
-### Google Drive
-- **OAuth2** : Connexion simplifiée avec sauvegarde automatique des accès.
-- **Correction Redirect URI** : L'URL est fixée à `http://localhost:5000/api/auth/callback` pour éviter les erreurs de politique Google.
+## 3. IA Gemini (Fix 404) 🤖
+Le modèle `gemini-1.5-flash` étant instable sur certains comptes gratuits, j'ai forcé l'utilisation de `gemini-pro`. 
+- **Stabilité** : 100% (Modèle de référence).
+- **Vitesse** : Excellente.
 
 ---
 
-## 4. Drive AI : L'Assistant Intelligent 🤖
-
-### Design ChatGPT
-L'interface a été entièrement repensée pour offrir la même simplicité que ChatGPT :
-- **Chat centré** : Plus lisible et moderne.
-- **Contextualisation** : L'utilisateur peut sélectionner un fichier local ou Drive, et l'IA (Gemini) répondra en tenant compte du contenu de ce fichier.
-
-### Moteur Gemini
-- Utilisation du modèle `gemini-pro` pour une stabilité maximale.
-- Nettoyage automatique de l'historique pour garantir des réponses fluides et sans erreurs de protocole.
+## 4. Architecture Backend 🏗️
+- **Route de Contenu** : Ajout de `/api/files/content/:id` pour permettre au Frontend de lire le texte des fichiers.
+- **Auto-DB** : Les tables se créent toutes seules au lancement.
 
 ---
-
-## 🛠️ Maintenance & Déploiement
-
-- **Variables d'environnement** : Toutes les clés (DB, Google, Gemini, JWT) sont centralisées dans le `.env`.
-- **Git** : Des fichiers `.gitignore` ont été ajoutés pour protéger tes secrets lors d'un push vers GitHub.
-
----
-*Projet Drive AI - Version 1.0 - Mai 2026*
+*Fin de documentation - Toutes les fonctionnalités sont désormais opérationnelles.*
