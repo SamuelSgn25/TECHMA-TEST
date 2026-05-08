@@ -8,7 +8,7 @@ const oauth2Client = new google.auth.OAuth2(
 );
 
 // Générer l'URL d'authentification
-const getAuthUrl = () => {
+const getAuthUrl = (userId) => {
   const scopes = [
     'https://www.googleapis.com/auth/drive',
     'https://www.googleapis.com/auth/drive.file'
@@ -16,6 +16,7 @@ const getAuthUrl = () => {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
+    state: userId.toString(), // On passe l'ID utilisateur ici
   });
 };
 
