@@ -30,10 +30,30 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: "Mot de passe incorrect." });
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET || 'fallback_secret_123', { expiresIn: '24h' });
     res.json({ token, user: { id: user.id, username: user.username, email: user.email, drive_enabled: user.drive_enabled } });
   } catch (error) {
     res.status(500).json({ error: "Erreur lors de la connexion." });
+  }
+});
+
+// Changement de mot de passe (Sécurisé)
+const authMiddleware = require('./middleware/auth');
+router.put('/change-password', authMiddleware, async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  try {
+    const userResult = await query('SELECT password FROM users WHERE id = $1', [req.user.id]);
+    const user = userResult.rows[0];
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(401).json({ error: "L'ancien mot de passe est incorrect." });
+
+    const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+    await query('UPDATE users SET password = $1 WHERE id = $2', [hashedNewPassword, req.user.id]);
+    
+    res.json({ success: true, message: "Mot de passe mis à jour avec succès." });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors du changement de mot de passe." });
   }
 });
 
