@@ -10,20 +10,27 @@ const oauth2Client = new google.auth.OAuth2(
 // Générer l'URL d'authentification
 const getAuthUrl = (userId) => {
   const scopes = [
-    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.readonly',
     'https://www.googleapis.com/auth/drive.file'
   ];
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    state: userId.toString(), // On passe l'ID utilisateur ici
+    state: userId.toString(),
+    prompt: 'consent',           // Force le consentement (résout le 403)
+    include_granted_scopes: true // Inclut les scopes déjà accordés
   });
 };
 
 // Obtenir le service Drive avec un token spécifique
 const getDriveService = (tokens) => {
-  oauth2Client.setCredentials(tokens);
-  return google.drive({ version: 'v3', auth: oauth2Client });
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    'http://localhost:5000/api/auth/callback'
+  );
+  client.setCredentials(typeof tokens === 'string' ? JSON.parse(tokens) : tokens);
+  return google.drive({ version: 'v3', auth: client });
 };
 
 // Lister les fichiers et dossiers
@@ -31,7 +38,7 @@ const listFiles = async (drive) => {
   const response = await drive.files.list({
     pageSize: 50,
     fields: 'files(id, name, mimeType, size, webViewLink, thumbnailLink)',
-    q: "trashed = false", // Ne pas afficher les fichiers supprimés
+    q: "trashed = false",
   });
   return response.data.files;
 };
