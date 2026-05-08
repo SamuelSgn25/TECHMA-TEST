@@ -4,6 +4,7 @@ import DriveExplorer from './components/DriveExplorer';
 import AIChat from './components/AIChat';
 import Login from './components/Login';
 import axios from 'axios';
+import { Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
 
 // Configuration globale d'Axios
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -91,9 +92,12 @@ function App() {
           {activeTab === 'chat' && <AIChat files={files} />}
           {activeTab === 'settings' && (
             <div className="max-w-3xl mx-auto space-y-8">
+              {/* Paramètres Drive */}
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-xl font-bold mb-6">Paramètres Google Drive</h3>
-                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                  <ShieldCheck className="text-premium-accent" /> Sécurité & Drive
+                </h3>
+                <div className="flex items-center justify-between p-6 bg-slate-50 rounded-2xl mb-8">
                   <div>
                     <p className="font-semibold">Intégration Google Drive</p>
                     <p className="text-sm text-slate-400">Accédez à tous vos dossiers Drive directement.</p>
@@ -101,6 +105,14 @@ function App() {
                   <button className={`px-6 py-2 rounded-xl font-bold transition-all ${user.drive_enabled ? 'bg-red-50 text-red-500' : 'bg-premium-accent text-white'}`}>
                     {user.drive_enabled ? "Déconnecter" : "Connecter"}
                   </button>
+                </div>
+
+                {/* Changement de Mot de Passe */}
+                <div className="pt-6 border-t border-slate-100">
+                  <h4 className="font-bold mb-4 flex items-center gap-2">
+                    <KeyRound size={18} className="text-premium-accent" /> Modifier le mot de passe
+                  </h4>
+                  <PasswordChangeForm />
                 </div>
               </div>
             </div>
@@ -110,5 +122,54 @@ function App() {
     </div>
   );
 }
+
+const PasswordChangeForm = () => {
+  const [show, setShow] = useState(false);
+  const [data, setData] = useState({ oldPassword: '', newPassword: '' });
+  const [msg, setMsg] = useState({ type: '', text: '' });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.put('auth/change-password', data);
+      setMsg({ type: 'success', text: 'Mot de passe modifié avec succès !' });
+      setData({ oldPassword: '', newPassword: '' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Erreur lors du changement' });
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+      {msg.text && (
+        <div className={`p-3 rounded-xl text-sm ${msg.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+          {msg.text}
+        </div>
+      )}
+      <div className="relative">
+        <input 
+          type={show ? "text" : "password"} 
+          placeholder="Ancien mot de passe"
+          className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl outline-none"
+          value={data.oldPassword} onChange={e => setData({...data, oldPassword: e.target.value})}
+        />
+      </div>
+      <div className="relative">
+        <input 
+          type={show ? "text" : "password"} 
+          placeholder="Nouveau mot de passe"
+          className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl outline-none"
+          value={data.newPassword} onChange={e => setData({...data, newPassword: e.target.value})}
+        />
+        <button type="button" onClick={() => setShow(!show)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">
+          {show ? <EyeOff size={18} /> : <Eye size={18} />}
+        </button>
+      </div>
+      <button className="bg-premium-dark text-white px-6 py-2 rounded-xl font-bold hover:bg-slate-800 transition-all">
+        Mettre à jour
+      </button>
+    </form>
+  );
+};
 
 export default App;
