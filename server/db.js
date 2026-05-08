@@ -1,7 +1,6 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Configuration segmentée
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
@@ -10,8 +9,13 @@ const pool = new Pool({
   port: process.env.DB_PORT,
 });
 
-pool.on('connect', () => {
-  console.log('PostgreSQL: Connecté avec succès');
+// Test de connexion immédiat
+pool.connect((err, client, release) => {
+  if (err) {
+    return console.error("❌ ERREUR CRITIQUE DATABASE : Impossible de se connecter à PostgreSQL. Vérifiez votre fichier .env.", err.stack);
+  }
+  console.log("✅ DATABASE : Connexion établie avec succès.");
+  release();
 });
 
 module.exports = {
