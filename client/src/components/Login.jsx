@@ -12,13 +12,13 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     try {
       if (mode === 'reset') {
-        await axios.post('auth/reset-password', formData);
+        await axios.post('/api/auth/reset-password', formData);
         setMode('login');
         setError('Mot de passe réinitialisé ! Connectez-vous.');
         return;
       }
 
-      const endpoint = mode === 'register' ? 'auth/register' : 'auth/login';
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/login';
       const { data } = await axios.post(endpoint, formData);
       if (mode !== 'register') {
         localStorage.setItem('token', data.token);

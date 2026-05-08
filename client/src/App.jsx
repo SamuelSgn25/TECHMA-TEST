@@ -6,8 +6,8 @@ import Login from './components/Login';
 import axios from 'axios';
 import { Eye, EyeOff, ShieldCheck, KeyRound, User as UserIcon } from 'lucide-react';
 
-// Configuration globale d'Axios - On pointe sur la racine du serveur
-axios.defaults.baseURL = 'http://localhost:5000/api';
+// Configuration globale d'Axios - On pointe sur la racine du serveur pour éviter les doubles /api
+axios.defaults.baseURL = 'http://localhost:5000';
 
 // Intercepteur pour injecter le token JWT et gérer les erreurs 401
 axios.interceptors.request.use(config => {
@@ -47,11 +47,20 @@ function App() {
     setLoading(true);
     try {
       const { data } = await axios.get('/api/files');
-      setFiles(data);
+      setFiles([...data.folders.map(f => ({...f, isFolder: true})), ...data.files, ...data.driveFiles]);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const connectGoogleDrive = async () => {
+    try {
+      const { data } = await axios.get('/api/google/auth-url');
+      window.open(data.url, '_blank', 'width=600,height=600');
+    } catch (err) {
+      alert("Erreur lors de la récupération de l'URL Google.");
     }
   };
 
@@ -110,7 +119,10 @@ function App() {
                     <p className="font-semibold">Intégration Google Drive</p>
                     <p className="text-sm text-slate-400">Accédez à tous vos dossiers Drive directement.</p>
                   </div>
-                  <button className={`px-6 py-2 rounded-xl font-bold transition-all ${user.drive_enabled ? 'bg-red-50 text-red-500' : 'bg-premium-accent text-white'}`}>
+                  <button 
+                    onClick={connectGoogleDrive}
+                    className={`px-6 py-2 rounded-xl font-bold transition-all ${user.drive_enabled ? 'bg-red-50 text-red-500' : 'bg-premium-accent text-white'}`}
+                  >
                     {user.drive_enabled ? "Déconnecter" : "Connecter"}
                   </button>
                 </div>
@@ -138,7 +150,7 @@ const ProfileForm = ({ user, setUser }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.put('auth/profile', data);
+      const response = await axios.put('/api/auth/profile', data);
       const updatedUser = { ...user, ...response.data.user };
       setUser(updatedUser);
       localStorage.setItem('user', JSON.stringify(updatedUser));
@@ -186,7 +198,7 @@ const PasswordChangeForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.put('auth/change-password', data);
+      await axios.put('/api/auth/change-password', data);
       setMsg({ type: 'success', text: 'Mot de passe modifié avec succès !' });
       setData({ oldPassword: '', newPassword: '' });
     } catch (err) {
