@@ -1,7 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { File, Folder, Upload, Trash2, Search, Plus, FolderPlus, Play, FileText, ChevronRight, Home, X, Image as ImageIcon } from 'lucide-react';
+import { Folder, Upload, Search, FolderPlus, Play, FileText, ChevronRight, Home, X, Image as ImageIcon, Music, FileArchive, Download } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Détermine le type de prévisualisation en fonction du MIME type et de l'extension
+const getPreviewType = (file) => {
+  const type = file.type || file.mimeType || '';
+  const name = file.name || '';
+  const ext = name.split('.').pop().toLowerCase();
+
+  if (type.includes('video') || ['mp4','webm','ogg','mov','avi'].includes(ext)) return 'video';
+  if (type.includes('audio') || ['mp3','wav','ogg','flac','aac','m4a'].includes(ext)) return 'audio';
+  if (type.includes('image') || ['png','jpg','jpeg','gif','webp','svg','bmp','ico'].includes(ext)) return 'image';
+  if (type.includes('pdf') || ext === 'pdf') return 'pdf';
+  if (type.includes('text') || type.includes('json') || type.includes('xml') || type.includes('javascript') || type.includes('css')
+    || ['txt','js','jsx','ts','tsx','css','html','json','xml','md','py','java','c','cpp','h','sql','sh','yml','yaml','env','csv','log'].includes(ext)) return 'text';
+  return 'unknown';
+};
+
+// Icône selon le type
+const FileIcon = ({ file }) => {
+  const preview = getPreviewType(file);
+  if (preview === 'image') return <ImageIcon size={24} />;
+  if (preview === 'video') return <Play size={24} />;
+  if (preview === 'audio') return <Music size={24} />;
+  if (preview === 'pdf') return <FileText size={24} className="text-red-500" />;
+  return <FileText size={24} />;
+};
 
 const DriveExplorer = ({ fetchFiles }) => {
   const [data, setData] = useState({ folders: [], files: [], driveFiles: [] });
@@ -14,12 +39,10 @@ const DriveExplorer = ({ fetchFiles }) => {
   const [newFolderName, setNewFolderName] = useState('');
   const [showFolderInput, setShowFolderInput] = useState(false);
 
-  useEffect(() => {
-    loadFiles();
-  }, [currentFolder]);
+  useEffect(() => { loadFiles(); }, [currentFolder]);
 
   useEffect(() => {
-    if (selectedFile && (selectedFile.type?.includes('text') || selectedFile.name.endsWith('.txt') || selectedFile.name.endsWith('.js') || selectedFile.name.endsWith('.css'))) {
+    if (selectedFile && getPreviewType(selectedFile) === 'text') {
       fetchFileContent(selectedFile.id);
     } else {
       setFileContent('');
@@ -68,14 +91,15 @@ const DriveExplorer = ({ fetchFiles }) => {
   const goToBreadcrumb = (index) => {
     if (index === -1) { setBreadcrumbs([]); setCurrentFolder(null); }
     else {
-      const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
-      setBreadcrumbs(newBreadcrumbs);
-      setCurrentFolder(newBreadcrumbs[index].id);
+      const bc = breadcrumbs.slice(0, index + 1);
+      setBreadcrumbs(bc);
+      setCurrentFolder(bc[index].id);
     }
   };
 
   const allFiles = [...data.folders.map(f => ({...f, isFolder: true})), ...data.files, ...data.driveFiles];
   const filtered = allFiles.filter(f => f.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const fileUrl = (file) => `http://localhost:5000/${file.path}`;
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -132,7 +156,7 @@ const DriveExplorer = ({ fetchFiles }) => {
               className="group p-4 bg-white border border-slate-50 rounded-2xl hover:shadow-xl transition-all cursor-pointer text-center"
             >
               <div className="w-12 h-12 mx-auto bg-slate-50 rounded-xl flex items-center justify-center text-premium-accent mb-2 group-hover:scale-110 transition-transform">
-                {item.isFolder ? <Folder size={24} fill="currentColor" /> : (item.type?.includes('image') ? <ImageIcon size={24}/> : (item.type?.includes('video') ? <Play size={24} /> : <FileText size={24} />))}
+                {item.isFolder ? <Folder size={24} fill="currentColor" /> : <FileIcon file={item} />}
               </div>
               <p className="text-xs font-semibold truncate text-slate-700">{item.name}</p>
               <p className="text-[9px] text-slate-300 mt-1 uppercase font-bold tracking-tighter">{item.source || 'Local'}</p>
@@ -141,33 +165,86 @@ const DriveExplorer = ({ fetchFiles }) => {
         </div>
       </div>
 
-      {/* Preview Overlay */}
+      {/* ===== PREVIEW OVERLAY ===== */}
       <AnimatePresence>
         {selectedFile && (
           <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4" onClick={() => setSelectedFile(null)}>
-            <motion.div initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} className="bg-white w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+            <motion.div
+              initial={{scale: 0.9, opacity: 0}} animate={{scale: 1, opacity: 1}} exit={{scale: 0.9, opacity: 0}}
+              className="bg-white w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
               <div className="p-4 border-b flex justify-between items-center bg-white sticky top-0 z-10">
-                <h3 className="font-bold truncate">{selectedFile.name}</h3>
-                <button onClick={() => setSelectedFile(null)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+                <div className="flex items-center gap-3">
+                  <div className="text-premium-accent"><FileIcon file={selectedFile} /></div>
+                  <div>
+                    <h3 className="font-bold truncate max-w-md">{selectedFile.name}</h3>
+                    <p className="text-xs text-slate-400">{selectedFile.type || 'Fichier'} • {selectedFile.size ? (selectedFile.size / 1024).toFixed(1) + ' KB' : ''}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <a href={fileUrl(selectedFile)} download className="p-2 hover:bg-slate-100 rounded-full text-slate-500" title="Télécharger">
+                    <Download size={20} />
+                  </a>
+                  <button onClick={() => setSelectedFile(null)} className="p-2 hover:bg-slate-100 rounded-full"><X size={20} /></button>
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 flex items-center justify-center">
-                {selectedFile.type?.includes('video') ? (
-                  <video controls className="w-full max-h-[70vh] rounded-xl shadow-2xl bg-black">
-                    <source src={`http://localhost:5000/${selectedFile.path}`} />
-                  </video>
-                ) : selectedFile.type?.includes('image') ? (
-                  <img src={`http://localhost:5000/${selectedFile.path}`} className="max-w-full max-h-[70vh] rounded-xl shadow-2xl object-contain" alt={selectedFile.name} />
-                ) : (fileContent ? (
-                  <div className="w-full h-full bg-white p-8 rounded-xl shadow-inner border border-slate-200 font-mono text-sm overflow-x-auto whitespace-pre-wrap">
-                    {fileContent}
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <FileText size={64} className="mx-auto text-slate-200 mb-4" />
-                    <p className="text-slate-500 mb-6">Aperçu non disponible pour ce type de fichier.</p>
-                    <a href={`http://localhost:5000/${selectedFile.path}`} download className="bg-premium-accent text-white px-8 py-3 rounded-xl font-bold inline-block hover:shadow-lg transition-all">Télécharger le fichier</a>
-                  </div>
-                ))}
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50 flex items-center justify-center min-h-[300px]">
+                {(() => {
+                  const type = getPreviewType(selectedFile);
+
+                  if (type === 'video') return (
+                    <video controls className="w-full max-h-[70vh] rounded-xl shadow-2xl bg-black">
+                      <source src={fileUrl(selectedFile)} />
+                      Votre navigateur ne supporte pas la lecture vidéo.
+                    </video>
+                  );
+
+                  if (type === 'audio') return (
+                    <div className="text-center w-full max-w-lg">
+                      <div className="w-32 h-32 mx-auto bg-gradient-to-br from-premium-accent to-indigo-600 rounded-full flex items-center justify-center mb-8 shadow-xl">
+                        <Music size={48} className="text-white" />
+                      </div>
+                      <p className="font-bold text-lg mb-6 text-slate-700">{selectedFile.name}</p>
+                      <audio controls className="w-full">
+                        <source src={fileUrl(selectedFile)} />
+                      </audio>
+                    </div>
+                  );
+
+                  if (type === 'image') return (
+                    <img src={fileUrl(selectedFile)} className="max-w-full max-h-[70vh] rounded-xl shadow-2xl object-contain" alt={selectedFile.name} />
+                  );
+
+                  if (type === 'pdf') return (
+                    <iframe
+                      src={fileUrl(selectedFile)}
+                      className="w-full h-[70vh] rounded-xl border-0 shadow-xl"
+                      title={selectedFile.name}
+                    />
+                  );
+
+                  if (type === 'text' && fileContent) return (
+                    <div className="w-full bg-white p-8 rounded-xl shadow-inner border border-slate-200 font-mono text-sm overflow-x-auto whitespace-pre-wrap max-h-[70vh] overflow-y-auto">
+                      {fileContent}
+                    </div>
+                  );
+
+                  // Fallback pour les types inconnus
+                  return (
+                    <div className="text-center py-12">
+                      <FileArchive size={64} className="mx-auto text-slate-200 mb-6" />
+                      <p className="text-slate-500 mb-2 font-medium">Aperçu non disponible pour ce format</p>
+                      <p className="text-xs text-slate-400 mb-8">Type : {selectedFile.type || 'inconnu'}</p>
+                      <a href={fileUrl(selectedFile)} download className="bg-premium-accent text-white px-8 py-3 rounded-xl font-bold inline-flex items-center gap-2 hover:shadow-lg transition-all">
+                        <Download size={18} /> Télécharger le fichier
+                      </a>
+                    </div>
+                  );
+                })()}
               </div>
             </motion.div>
           </div>
