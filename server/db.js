@@ -1,4 +1,6 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
 
 const pool = new Pool({
@@ -9,12 +11,24 @@ const pool = new Pool({
   port: process.env.DB_PORT,
 });
 
-// Test de connexion immédiat
+// Fonction pour initialiser les tables automatiquement
+const initDb = async () => {
+  try {
+    const schemaPath = path.join(__dirname, 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    await pool.query(schema);
+    console.log("✅ DATABASE : Tables initialisées/vérifiées avec succès.");
+  } catch (err) {
+    console.error("❌ DATABASE INIT ERROR :", err.message);
+  }
+};
+
 pool.connect((err, client, release) => {
   if (err) {
-    return console.error("❌ ERREUR CRITIQUE DATABASE : Impossible de se connecter à PostgreSQL. Vérifiez votre fichier .env.", err.stack);
+    return console.error("❌ DATABASE CONNECT ERROR :", err.stack);
   }
-  console.log("✅ DATABASE : Connexion établie avec succès.");
+  console.log("✅ DATABASE : Connecté à PostgreSQL.");
+  initDb(); // On lance l'initialisation après la connexion
   release();
 });
 
