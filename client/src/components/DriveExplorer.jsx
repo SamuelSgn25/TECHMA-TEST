@@ -20,7 +20,7 @@ const DriveExplorer = ({ fetchFiles }) => {
   const loadFiles = async () => {
     setLoading(true);
     try {
-      const { data } = await axios.get('/api/files', {
+      const { data } = await axios.get('files', {
         params: { folderId: currentFolder }
       });
       setData(data);
@@ -38,7 +38,7 @@ const DriveExplorer = ({ fetchFiles }) => {
     formData.append('file', file);
     formData.append('folderId', currentFolder || '');
     try {
-      await axios.post('/api/files/upload', formData);
+      await axios.post('files/upload', formData);
       loadFiles();
     } catch (err) {
       alert("Erreur lors de l'upload. Vérifiez que le serveur est lancé.");
@@ -47,7 +47,7 @@ const DriveExplorer = ({ fetchFiles }) => {
 
   const createNewFolder = async () => {
     if (!newFolderName.trim()) return;
-    await axios.post('/api/folders', { name: newFolderName, parentId: currentFolder });
+    await axios.post('folders', { name: newFolderName, parentId: currentFolder });
     setNewFolderName('');
     setShowFolderInput(false);
     loadFiles();

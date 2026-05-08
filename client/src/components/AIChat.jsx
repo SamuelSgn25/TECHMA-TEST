@@ -24,7 +24,7 @@ const AIChat = ({ files }) => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/ai/chat', {
+      const response = await axios.post('ai/chat', {
         prompt: input,
         history: messages,
         fileContext: selectedContext ? { name: selectedContext.name, path: selectedContext.path } : null

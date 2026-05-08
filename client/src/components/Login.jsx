@@ -9,7 +9,7 @@ const Login = ({ onLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+      const endpoint = isRegister ? 'auth/register' : 'auth/login';
       const { data } = await axios.post(endpoint, formData);
       if (!isRegister) {
         localStorage.setItem('token', data.token);
