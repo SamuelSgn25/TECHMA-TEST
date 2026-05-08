@@ -5,8 +5,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const askDriveAI = async (prompt, history, fileContext) => {
   try {
-    // On utilise 1.5-flash : c'est le plus rapide et le plus généreux en version gratuite
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Forçage sur gemini-pro car flash-1.5 renvoie des 404 pour certains comptes
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
     let cleanedHistory = history
       .filter(m => m.role === 'user' || m.role === 'assistant')
