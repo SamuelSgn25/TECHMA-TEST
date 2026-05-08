@@ -21,10 +21,12 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // Routes publiques
 app.use('/api/auth', authRoutes);
 
-// Configuration Multer pour les uploads locaux
+// Configuration Multer corrigée
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const userDir = `./uploads/${req.user.id}`;
+    // On récupère l'ID depuis le token décodé par authMiddleware
+    const userId = req.user.id;
+    const userDir = path.join(__dirname, 'uploads', userId.toString());
     if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
     cb(null, userDir);
   },
@@ -34,94 +36,116 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// --- ROUTES PROTÉGÉES (Nécessitent une connexion) ---
+// --- ROUTES PROTÉGÉES ---
 
-// Récupérer les dossiers locaux
-app.get('/api/folders', authMiddleware, async (req, res) => {
-  try {
-    const result = await query('SELECT * FROM local_folders WHERE user_id = $1', [req.user.id]);
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+// Google Auth URL
+app.get('/api/google/auth-url', authMiddleware, (req, res) => {
+  res.json({ url: getAuthUrl(req.user.id) });
 });
 
-// Créer un dossier (Local ou Drive)
-app.post('/api/folders', authMiddleware, async (req, res) => {
-  const { name, parentId, isDrive } = req.body;
+// Callback Google (Public mais gère le state)
+app.get('/api/auth/callback', async (req, res) => {
+  const { code, state: userId } = req.query;
   try {
-    if (isDrive) {
-      const user = await query('SELECT drive_tokens FROM users WHERE id = $1', [req.user.id]);
-      const drive = getDriveService(user.rows[0].drive_tokens);
-      const folderId = await createFolder(drive, name);
-      return res.json({ id: folderId, name, isDrive: true });
-    }
-
-    const result = await query(
-      'INSERT INTO local_folders (user_id, name, parent_id) VALUES ($1, $2, $3) RETURNING *',
-      [req.user.id, name, parentId]
+    const { tokens } = await oauth2Client.getToken(code);
+    // Sauvegarder les tokens pour cet utilisateur
+    await query(
+      'UPDATE users SET drive_tokens = $1, drive_enabled = true WHERE id = $2',
+      [JSON.stringify(tokens), userId]
     );
-    res.json(result.rows[0]);
+    res.send("<h1>Connexion réussie !</h1><p>Vous pouvez fermer cet onglet et rafraîchir l'application.</p><script>setTimeout(() => window.close(), 3000)</script>");
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).send("Erreur d'authentification Google");
   }
 });
 
-// Upload de fichier local
-app.post('/api/files/upload', authMiddleware, upload.single('file'), async (req, res) => {
-  const { filename, mimetype, size, path: filePath } = req.file;
-  const { folderId } = req.body;
-  try {
-    const result = await query(
-      'INSERT INTO local_files (user_id, name, type, size, path, folder_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [req.user.id, filename, mimetype, size, filePath, folderId || null]
-    );
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Récupérer tous les fichiers (Drive ou Locaux)
+// Récupérer les fichiers et dossiers (filtrés par folderId)
 app.get('/api/files', authMiddleware, async (req, res) => {
+  const { folderId } = req.query;
   try {
     const user = await query('SELECT drive_enabled, drive_tokens FROM users WHERE id = $1', [req.user.id]);
     const { drive_enabled, drive_tokens } = user.rows[0];
 
-    let files = [];
+    // Fichiers locaux
+    let sql = 'SELECT * FROM local_files WHERE user_id = $1';
+    let params = [req.user.id];
+    if (folderId && folderId !== 'root') {
+      sql += ' AND folder_id = $2';
+      params.push(folderId);
+    } else {
+      sql += ' AND folder_id IS NULL';
+    }
+    const localFiles = await query(sql, params);
+
+    // Dossiers locaux
+    let folderSql = 'SELECT * FROM local_folders WHERE user_id = $1';
+    let folderParams = [req.user.id];
+    if (folderId && folderId !== 'root') {
+      folderSql += ' AND parent_id = $2';
+      folderParams.push(folderId);
+    } else {
+      folderSql += ' AND parent_id IS NULL';
+    }
+    const folders = await query(folderSql, folderParams);
+
+    // Google Drive (simplifié : on affiche tout pour l'instant)
+    let driveFiles = [];
     if (drive_enabled && drive_tokens) {
       const drive = getDriveService(drive_tokens);
-      const driveFiles = await listFiles(drive);
-      files = [...driveFiles.map(f => ({ ...f, source: 'drive' }))];
+      driveFiles = await listFiles(drive);
     }
-    
-    const localFiles = await query('SELECT * FROM local_files WHERE user_id = $1', [req.user.id]);
-    files = [...files, ...localFiles.rows.map(f => ({ ...f, source: 'local' }))];
-    
-    res.json(files);
+
+    res.json({
+      folders: folders.rows,
+      files: localFiles.rows,
+      driveFiles: driveFiles.map(f => ({ ...f, source: 'drive' }))
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// --- GOOGLE DRIVE AUTH FLOW ---
-
-app.get('/api/google/auth-url', authMiddleware, (req, res) => {
-  res.json({ url: getAuthUrl() });
+// Créer un dossier
+app.post('/api/folders', authMiddleware, async (req, res) => {
+  const { name, parentId } = req.body;
+  try {
+    const result = await query(
+      'INSERT INTO local_folders (user_id, name, parent_id) VALUES ($1, $2, $3) RETURNING *',
+      [req.user.id, name, parentId || null]
+    );
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.get('/api/auth/callback', async (req, res) => {
-  const { code, state } = req.query; // 'state' peut contenir l'ID utilisateur si passé au début
+// Upload local (On s'assure que authMiddleware est passé)
+app.post('/api/files/upload', authMiddleware, upload.single('file'), async (req, res) => {
+  const { filename, mimetype, size } = req.file;
+  const { folderId } = req.body;
+  const relativePath = `uploads/${req.user.id}/${filename}`;
   try {
-    const { tokens } = await oauth2Client.getToken(code);
-    // Note: Pour cet exemple, on suppose que l'utilisateur est identifié via un paramètre ou session
-    // Dans une version de production, on utiliserait le 'state' pour faire le lien
-    res.send("Authentification réussie ! Vous pouvez fermer cette fenêtre. (Veuillez mettre à jour manuellement dans la DB pour l'instant)");
+    const result = await query(
+      'INSERT INTO local_files (user_id, name, type, size, path, folder_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [req.user.id, filename, mimetype, size, relativePath, folderId && folderId !== 'undefined' ? folderId : null]
+    );
+    res.json(result.rows[0]);
   } catch (error) {
-    res.status(500).send("Erreur Google Auth");
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Route Drive AI
+app.post('/api/ai/chat', authMiddleware, async (req, res) => {
+  const { prompt, history, fileContext } = req.body;
+  try {
+    const response = await askDriveAI(prompt, history, fileContext);
+    res.json({ response });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Serveur Drive AI sécurisé démarré sur http://localhost:${PORT}`);
+  console.log(`Serveur Drive AI opérationnel sur http://localhost:${PORT}`);
 });
