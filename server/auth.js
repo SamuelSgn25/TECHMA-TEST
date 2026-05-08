@@ -57,4 +57,20 @@ router.put('/change-password', authMiddleware, async (req, res) => {
   }
 });
 
+// Réinitialisation de mot de passe (Depuis le formulaire de login)
+router.post('/reset-password', async (req, res) => {
+  const { email, newPassword } = req.body;
+  try {
+    const result = await query('SELECT id FROM users WHERE email = $1', [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: "Aucun utilisateur trouvé avec cet email." });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await query('UPDATE users SET password = $1 WHERE email = $2', [hashedPassword, email]);
+    
+    res.json({ success: true, message: "Votre mot de passe a été réinitialisé." });
+  } catch (error) {
+    res.status(500).json({ error: "Erreur lors de la réinitialisation." });
+  }
+});
+
 module.exports = router;
