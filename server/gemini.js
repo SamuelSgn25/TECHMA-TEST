@@ -1,15 +1,13 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 require('dotenv').config();
 
-// Initialisation avec la clé API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const askDriveAI = async (prompt, history, fileContext) => {
   try {
-    // Utilisation du modèle flash 1.5 (version stable)
+    // On utilise 1.5-flash : c'est le plus rapide et le plus généreux en version gratuite
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    // Nettoyage de l'historique pour Gemini
     let cleanedHistory = history
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => ({
@@ -17,14 +15,13 @@ const askDriveAI = async (prompt, history, fileContext) => {
         parts: [{ text: m.content }]
       }));
 
-    // Gemini exige que le premier message soit 'user'
     while (cleanedHistory.length > 0 && cleanedHistory[0].role !== 'user') {
       cleanedHistory.shift();
     }
 
     let fullPrompt = prompt;
     if (fileContext) {
-      fullPrompt = `[CONTEXTE FICHIER]\nNom: ${fileContext.name}\nLien: ${fileContext.path}\n\n[QUESTION]\n${prompt}`;
+      fullPrompt = `CONTEXTE FICHIER: ${fileContext.name}\n${prompt}`;
     }
 
     const chat = model.startChat({
@@ -35,11 +32,19 @@ const askDriveAI = async (prompt, history, fileContext) => {
     const response = await result.response;
     return response.text();
   } catch (error) {
-    console.error("❌ Gemini Error Details:", error.message);
-    if (error.message.includes("404")) {
-      return "Désolé, le modèle Gemini est actuellement indisponible ou le nom du modèle est incorrect. Veuillez vérifier votre clé API.";
+    console.error("❌ Gemini Error:", error.message);
+    
+    // Si flash échoue, on tente le pro (fallback)
+    if (error.message.includes("404") || error.message.includes("500")) {
+      try {
+        const modelPro = genAI.getGenerativeModel({ model: "gemini-pro" });
+        const result = await modelPro.generateContent(prompt);
+        return result.response.text();
+      } catch (e) {
+        return "Erreur : Les modèles Gemini sont saturés ou votre clé API est limitée. Réessayez dans une minute.";
+      }
     }
-    throw error;
+    return "Une erreur est survenue lors de la communication avec l'IA.";
   }
 };
 
