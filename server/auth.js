@@ -82,4 +82,19 @@ router.put('/change-password', authMiddleware, async (req, res) => {
   }
 });
 
+// --- MISE À JOUR DU PROFIL ---
+router.put('/profile', authMiddleware, async (req, res) => {
+  const { username, email } = req.body;
+  try {
+    const result = await query(
+      'UPDATE users SET username = $1, email = $2 WHERE id = $3 RETURNING id, username, email',
+      [username, email, req.user.id]
+    );
+    res.json({ success: true, user: result.rows[0] });
+  } catch (error) {
+    console.error("Profile Update Error:", error);
+    res.status(500).json({ error: "Erreur lors de la mise à jour du profil." });
+  }
+});
+
 module.exports = router;
