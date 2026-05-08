@@ -5,12 +5,27 @@ import AIChat from './components/AIChat';
 import Login from './components/Login';
 import axios from 'axios';
 
-// Intercepteur pour injecter le token JWT
+// Configuration globale d'Axios
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+// Intercepteur pour injecter le token JWT et gérer les erreurs 401
 axios.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
+
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload(); // Force la reconnexion
+    }
+    return Promise.reject(error);
+  }
+);
 
 function App() {
   const [user, setUser] = useState(null);
