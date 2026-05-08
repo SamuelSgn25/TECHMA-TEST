@@ -4,10 +4,10 @@ import DriveExplorer from './components/DriveExplorer';
 import AIChat from './components/AIChat';
 import Login from './components/Login';
 import axios from 'axios';
-import { Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, KeyRound, User as UserIcon } from 'lucide-react';
 
-// Configuration globale d'Axios
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Configuration globale d'Axios - On pointe sur la racine du serveur
+axios.defaults.baseURL = 'http://localhost:5000/api';
 
 // Intercepteur pour injecter le token JWT et gérer les erreurs 401
 axios.interceptors.request.use(config => {
@@ -91,7 +91,15 @@ function App() {
           )}
           {activeTab === 'chat' && <AIChat files={files} />}
           {activeTab === 'settings' && (
-            <div className="max-w-3xl mx-auto space-y-8">
+            <div className="max-w-3xl mx-auto space-y-8 pb-20">
+              {/* Informations de Profil */}
+              <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2 text-premium-dark">
+                  <UserIcon className="text-premium-accent" size={24} /> Informations de Profil
+                </h3>
+                <ProfileForm user={user} setUser={setUser} />
+              </div>
+
               {/* Paramètres Drive */}
               <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
@@ -122,6 +130,53 @@ function App() {
     </div>
   );
 }
+
+const ProfileForm = ({ user, setUser }) => {
+  const [data, setData] = useState({ username: user.username, email: user.email });
+  const [msg, setMsg] = useState({ type: '', text: '' });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await axios.put('auth/profile', data);
+      const updatedUser = { ...user, ...response.data.user };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setMsg({ type: 'success', text: 'Profil mis à jour avec succès !' });
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.error || 'Erreur lors de la mise à jour' });
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+      {msg.text && (
+        <div className={`p-3 rounded-xl text-sm ${msg.type === 'success' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+          {msg.text}
+        </div>
+      )}
+      <div className="space-y-1">
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Nom d'utilisateur</label>
+        <input 
+          type="text" 
+          className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-premium-accent/10"
+          value={data.username} onChange={e => setData({...data, username: e.target.value})}
+        />
+      </div>
+      <div className="space-y-1">
+        <label className="text-xs font-bold text-slate-400 uppercase ml-1">Email</label>
+        <input 
+          type="email" 
+          className="w-full px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-premium-accent/10"
+          value={data.email} onChange={e => setData({...data, email: e.target.value})}
+        />
+      </div>
+      <button className="bg-premium-accent text-white px-8 py-3 rounded-xl font-bold hover:shadow-lg hover:shadow-premium-accent/20 transition-all">
+        Enregistrer les modifications
+      </button>
+    </form>
+  );
+};
 
 const PasswordChangeForm = () => {
   const [show, setShow] = useState(false);
