@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #f8fafc; /* Fallback direct pour le blanc aéré */
+    color: #0f172a; /* Fallback pour l'ardoise foncé */
+    @apply font-sans antialiased bg-premium-light text-premium-dark;
+  }
+}
+
+/* Custom scrollbar for premium look */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full hover:bg-slate-400 transition-colors;
+}
+
+/* Chat bubble styles */
+.chat-bubble-user {
+  @apply bg-premium-accent text-white rounded-2xl rounded-tr-none px-4 py-2 max-w-[80%] self-end shadow-sm;
+}
+.chat-bubble-ai {
+  @apply bg-white border border-slate-200 text-premium-dark rounded-2xl rounded-tl-none px-4 py-2 max-w-[80%] self-start shadow-sm;
+}
+
+/* Glassmorphism effect */
+.glass {
+  @apply bg-white/70 backdrop-blur-md border border-white/20;
+}
