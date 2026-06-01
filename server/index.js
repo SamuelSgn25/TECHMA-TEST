@@ -53,10 +53,18 @@ app.get('/api/auth/callback', async (req, res) => {
   const { code, state: userId } = req.query;
   try {
     const { tokens } = await oauth2Client.getToken(code);
+    const existing = await query('SELECT drive_tokens FROM users WHERE id = $1', [userId]);
+    const existingTokens = existing.rows[0]?.drive_tokens || null;
+
+    const savedTokens = existingTokens && !tokens.refresh_token
+      ? { ...existingTokens, ...tokens }
+      : tokens;
+
     await query(
       'UPDATE users SET drive_tokens = $1, drive_enabled = true WHERE id = $2',
-      [JSON.stringify(tokens), userId]
+      [JSON.stringify(savedTokens), userId]
     );
+
     res.send("<h1>Connexion réussie !</h1><script>setTimeout(() => window.close(), 2000)</script>");
   } catch (error) {
     console.error("Google Callback Error:", error);
@@ -115,7 +123,16 @@ app.get('/api/files', authMiddleware, async (req, res) => {
         const drive = getDriveService(drive_tokens);
         const df = await listFiles(drive);
         driveFiles = df.map(f => ({ ...f, source: 'drive' }));
-      } catch (e) { console.error("Drive Fetch Error:", e.message); }
+      } catch (e) {
+        console.error("Drive Fetch Error:", e.message);
+        if (e.message.includes('invalid_grant')) {
+          await query(
+            'UPDATE users SET drive_tokens = NULL, drive_enabled = false WHERE id = $1',
+            [req.user.id]
+          );
+          console.error(`Drive credentials invalid for user ${req.user.id}, cleared Drive connection.`);
+        }
+      }
     }
 
     res.json({
@@ -170,12 +187,36 @@ app.post('/api/files/upload', authMiddleware, upload.single('file'), async (req,
   }
 });
 
-app.post('/api/ai/chat', authMiddleware, async (req, res) => {
-  const { prompt, history, fileContext } = req.body;
+app.post('/api/ai/chat', authMiddleware, upload.single('file'), async (req, res) => {
+  const { prompt, history } = req.body;
+  let fileContext = null;
+
   try {
-    const response = await askDriveAI(prompt, history, fileContext);
-    res.json({ response });
+    // If file is uploaded
+    if (req.file) {
+      const { filename, mimetype, path: filePath } = req.file;
+      let fileContent = '';
+
+      // Read file content based on type
+      if (mimetype.includes('text') || mimetype.includes('json') || mimetype.includes('xml')) {
+        fileContent = fs.readFileSync(filePath, 'utf8');
+      } else {
+        fileContent = `[Fichier binaire: ${filename}]`;
+      }
+
+      fileContext = {
+        name: filename,
+        type: mimetype,
+        size: req.file.size,
+        content: fileContent
+      };
+    }
+
+    const parsedHistory = typeof history === 'string' ? JSON.parse(history) : (history || []);
+    const response = await askDriveAI(prompt, parsedHistory, fileContext);
+    res.json({ response: response.response || response });
   } catch (error) {
+    console.error('Chat error:', error);
     res.status(500).json({ error: error.message });
   }
 });
