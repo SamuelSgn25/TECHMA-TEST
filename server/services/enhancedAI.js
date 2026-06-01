@@ -4,15 +4,21 @@
  * Combines vector search with Gemini for better answers
  */
 
-const axios = require('axios');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { query } = require('../db');
 const { EmbeddingService } = require('./embeddingService');
 
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = 'gemini-2.0-flash';
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const MODEL = 'gemini-2.5-flash';
+
+if (!GEMINI_API_KEY) {
+  throw new Error('Erreur : La variable GEMINI_API_KEY n\'est pas définie dans votre fichier .env.');
+}
+
+const ai = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = ai.getGenerativeModel({ model: MODEL });
 
 class EnhancedAIService {
   /**
@@ -64,24 +70,24 @@ class EnhancedAIService {
       const contents = this.formatConversationForGemini(conversationHistory, augmentedPrompt);
 
       // Step 5: Call Gemini API
-      console.log(`🤖 Calling Gemini AI...`);
-      const response = await axios.post(API_URL, 
-        { 
-          contents,
-          generationConfig: {
-            temperature: temperature,
-            topP: 0.95,
-            topK: 40,
-            maxOutputTokens: 2048
-          }
-        },
-        {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 30000,
+      console.log(`🤖 Calling Gemini with ${MODEL}...`);
+      
+      const chat = model.startChat({
+        history: contents.slice(0, -1),
+        generationConfig: {
+          temperature: temperature,
+          topP: 0.95,
+          topK: 40,
+          maxOutputTokens: 2048
         }
-      );
+      });
 
-      const aiResponse = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const response = await chat.sendMessage(contents[contents.length - 1].parts[0].text);
+      const aiResponse = response?.response?.candidates?.[0]?.content?.parts
+        ?.filter(part => part.text)
+        .map(part => part.text)
+        .join(' ')
+        .trim();
 
       // Step 6: Generate follow-up suggestions
       const followUps = await this.generateFollowUpQuestions(aiResponse, prompt);
@@ -94,7 +100,7 @@ class EnhancedAIService {
           similarity: s.similarity
         })),
         followUpQuestions: followUps,
-        tokensUsed: response.data.usageMetadata?.totalTokenCount || 0
+        tokensUsed: 0
       };
     } catch (error) {
       console.error('AI Chat Error:', error);
@@ -193,16 +199,16 @@ IMPORTANT:
    * Handle AI errors gracefully
    */
   static handleAIError(error) {
-    const status = error.response?.status;
+    const status = error.response?.status || error.status;
     const msg = error.response?.data?.error?.message || error.message;
 
     console.error(`❌ AI Error (${status}):`, msg);
 
     let userMessage = 'Une erreur est survenue avec l\'IA.';
 
-    if (status === 429) {
+    if (status === 429 || msg.includes('rate')) {
       userMessage = '⏳ Le quota Gemini est temporairement atteint. Réessayez dans ~1 minute.';
-    } else if (status === 400) {
+    } else if (status === 400 || msg.includes('invalid')) {
       userMessage = '❌ Requête invalide. Vérifiez votre clé API Gemini.';
     } else if (status === 500) {
       userMessage = '❌ Erreur serveur Gemini. Réessayez plus tard.';
