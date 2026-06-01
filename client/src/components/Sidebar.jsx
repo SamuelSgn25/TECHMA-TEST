@@ -1,7 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, MessageSquare, Settings, HardDrive, LogOut, ToggleLeft as Toggle } from 'lucide-react';
 
-const Sidebar = ({ activeTab, setActiveTab, driveConnected, toggleDrive }) => {
+const Sidebar = ({ activeTab, setActiveTab, driveConnected, toggleDrive, onLogout }) => {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Mes Fichiers' },
     { id: 'chat', icon: MessageSquare, label: 'Drive AI' },
@@ -44,7 +44,7 @@ const Sidebar = ({ activeTab, setActiveTab, driveConnected, toggleDrive }) => {
              <Toggle size={24} fill={driveConnected ? 'currentColor' : 'none'} />
           </button>
         </div>
-        <button className="w-full flex items-center gap-4 px-4 py-3 text-slate-400 hover:text-red-500 transition-colors">
+        <button onClick={onLogout} className="w-full flex items-center gap-4 px-4 py-3 text-slate-400 hover:text-red-500 transition-colors">
           <LogOut size={20} />
           <span className="font-medium">Déconnexion</span>
         </button>

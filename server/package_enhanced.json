@@ -1,0 +1,58 @@
+{
+  "name": "drive-ai-server-enhanced",
+  "version": "2.0.0",
+  "description": "Enhanced backend for Drive AI - Video processing, transcription, and multimodal AI",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "db:migrate": "node scripts/migrate.js",
+    "db:seed": "node scripts/seed.js",
+    "test": "jest",
+    "test:watch": "jest --watch"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.11.1",
+    "@tus/server": "^0.6.0",
+    "axios": "^1.7.2",
+    "bcryptjs": "^2.4.3",
+    "bull": "^4.11.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-limiter": "^1.6.1",
+    "fluent-ffmpeg": "^2.1.2",
+    "googleapis": "^137.1.0",
+    "joi": "^17.11.0",
+    "jsonwebtoken": "^9.0.2",
+    "mammoth": "^1.6.0",
+    "multer": "^1.4.5-lts.1",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^3.11.174",
+    "pg": "^8.11.5",
+    "pg-boss": "^9.2.0",
+    "pg-promise": "^11.5.0",
+    "redis": "^4.6.0",
+    "sharp": "^0.33.0",
+    "tesseract.js": "^5.0.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "video",
+    "transcription",
+    "ai",
+    "gemini",
+    "google-drive",
+    "rag",
+    "embeddings"
+  ],
+  "author": "Drive AI Team",
+  "license": "MIT"
+}

@@ -64,6 +64,20 @@ function App() {
     }
   };
 
+  const disconnectGoogleDrive = async () => {
+    if (window.confirm('Êtes-vous sûr de vouloir déconnecter votre Google Drive ?')) {
+      try {
+        await axios.post('/api/google/disconnect');
+        const updatedUser = { ...user, drive_enabled: false };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+        alert('Google Drive déconnecté avec succès.');
+      } catch (err) {
+        alert('Erreur lors de la déconnexion.');
+      }
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -77,7 +91,6 @@ function App() {
       <Sidebar 
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
-        user={user}
         onLogout={handleLogout}
       />
       
@@ -120,7 +133,7 @@ function App() {
                     <p className="text-sm text-slate-400">Accédez à tous vos dossiers Drive directement.</p>
                   </div>
                   <button 
-                    onClick={connectGoogleDrive}
+                    onClick={user.drive_enabled ? disconnectGoogleDrive : connectGoogleDrive}
                     className={`px-6 py-2 rounded-xl font-bold transition-all ${user.drive_enabled ? 'bg-red-50 text-red-500' : 'bg-premium-accent text-white'}`}
                   >
                     {user.drive_enabled ? "Déconnecter" : "Connecter"}

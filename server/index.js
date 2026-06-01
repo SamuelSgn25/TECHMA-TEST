@@ -64,6 +64,20 @@ app.get('/api/auth/callback', async (req, res) => {
   }
 });
 
+// Disconnect Google Drive
+app.post('/api/google/disconnect', authMiddleware, async (req, res) => {
+  try {
+    await query(
+      'UPDATE users SET drive_tokens = NULL, drive_enabled = false WHERE id = $1',
+      [req.user.id]
+    );
+    res.json({ success: true, message: "Google Drive déconnecté" });
+  } catch (error) {
+    console.error("Google Disconnect Error:", error);
+    res.status(500).json({ error: "Erreur lors de la déconnexion" });
+  }
+});
+
 // Récupérer les fichiers et dossiers
 app.get('/api/files', authMiddleware, async (req, res) => {
   const { folderId } = req.query;
