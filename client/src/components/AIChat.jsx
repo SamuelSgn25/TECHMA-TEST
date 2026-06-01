@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Upload, X, Loader, MessageSquare, Sparkles, Paperclip, FileText } from 'lucide-react';
+import { Send, Upload, X, Loader, MessageSquare, Sparkles, Paperclip, FileText, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -9,15 +9,23 @@ const AIChat = ({ files }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingStatus, setProcessingStatus] = useState('');
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(scrollToBottom, [messages]);
 
+  const MAX_FILE_SIZE = 50 * 1024 * 1024 * 1024; // 50GB
+
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`Fichier trop volumineux. Maximum: 50GB`);
+        return;
+      }
       setUploadedFile({ name: file.name, size: file.size, type: file.type, file });
     }
   };
@@ -38,6 +46,10 @@ const AIChat = ({ files }) => {
     setDragActive(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`Fichier trop volumineux. Maximum: 50GB`);
+        return;
+      }
       setUploadedFile({ name: file.name, size: file.size, type: file.type, file });
     }
   };
@@ -56,34 +68,52 @@ const AIChat = ({ files }) => {
     setInput('');
     setUploadedFile(null);
     setIsLoading(true);
+    setUploadProgress(0);
+    setProcessingStatus('');
 
     try {
-      // If file is uploaded, prepare FormData
-      let requestData = { prompt: input, history: messages };
-
       if (uploadedFile) {
+        setProcessingStatus('📤 Téléchargement du fichier...');
+        
         const formData = new FormData();
         formData.append('prompt', input);
         formData.append('history', JSON.stringify(messages));
         formData.append('file', uploadedFile.file);
 
         const response = await axios.post('/api/ai/chat', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+            if (percent < 50) {
+              setProcessingStatus(`📤 Téléchargement... ${percent}%`);
+            } else if (percent < 100) {
+              setProcessingStatus(`⚙️ Traitement du fichier... ${percent}%`);
+            } else {
+              setProcessingStatus('🤖 IA en train de répondre...');
+            }
+          }
         });
 
         setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
       } else {
-        const response = await axios.post('/api/ai/chat', requestData);
+        const response = await axios.post('/api/ai/chat', {
+          prompt: input,
+          history: messages
+        });
         setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
       }
     } catch (error) {
       console.error('Chat error:', error);
+      const errorMsg = error.response?.data?.error || error.message || "Erreur inconnue";
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: "Désolé, une erreur est survenue. Veuillez réessayer."
+        content: `❌ Erreur: ${errorMsg}`
       }]);
     } finally {
       setIsLoading(false);
+      setUploadProgress(0);
+      setProcessingStatus('');
     }
   };
 
@@ -92,6 +122,14 @@ const AIChat = ({ files }) => {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -104,12 +142,14 @@ const AIChat = ({ files }) => {
               <MessageSquare className="text-premium-accent" size={32} />
             </div>
             <h1 className="text-4xl font-bold text-slate-900 mb-3">Drive AI Assistant</h1>
-            <p className="text-slate-500 max-w-md mb-8">Posez des questions sur vos fichiers, analysez leur contenu, ou demandez des résumés et explications.</p>
+            <p className="text-slate-500 max-w-md mb-8">
+              Uploadez des fichiers (Word, PDF, images, audio, vidéo jusqu'à 50GB) et posez des questions sur leur contenu.
+            </p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl mb-6">
               {[
-                { icon: Sparkles, label: 'Résumé du fichier', prompt: 'Résume ce fichier en points clés' },
-                { icon: Paperclip, label: 'Questions rapides', prompt: 'Quels sont les éléments importants?' },
+                { icon: Sparkles, label: 'Résumé', prompt: 'Résume ce fichier' },
+                { icon: Paperclip, label: 'Questions', prompt: 'Quels sont les points clés?' },
               ].map((item, idx) => (
                 <button
                   key={idx}
@@ -120,6 +160,16 @@ const AIChat = ({ files }) => {
                   <p className="font-semibold text-slate-900 text-sm">{item.label}</p>
                 </button>
               ))}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 max-w-md text-sm">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="text-blue-600 mt-0.5 shrink-0" size={18} />
+                <div className="text-left text-blue-700">
+                  <p className="font-semibold mb-1">Formats supportés:</p>
+                  <p>PDF, Word, images (OCR), audio (transcription), vidéo (+ transcription)</p>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -167,16 +217,33 @@ const AIChat = ({ files }) => {
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex gap-4 justify-start"
+                  className="flex flex-col gap-4"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-premium-accent to-purple-600 flex items-center justify-center text-white shrink-0">
-                    <Loader size={16} className="animate-spin" />
-                  </div>
-                  <div className="bg-slate-50 rounded-2xl rounded-tl-none px-4 py-3 border border-slate-100">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></div>
+                  {processingStatus && (
+                    <div className="text-center text-sm text-slate-600 font-medium">
+                      {processingStatus}
+                    </div>
+                  )}
+
+                  {uploadProgress > 0 && uploadProgress < 100 && (
+                    <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="bg-premium-accent h-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 justify-start">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-premium-accent to-purple-600 flex items-center justify-center text-white shrink-0">
+                      <Loader size={16} className="animate-spin" />
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl rounded-tl-none px-4 py-3 border border-slate-100">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></div>
+                        <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></div>
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -195,8 +262,10 @@ const AIChat = ({ files }) => {
             <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-blue-700">
                 <FileText size={16} />
-                <span className="font-medium">{uploadedFile.name}</span>
-                <span className="text-blue-600">({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                <div>
+                  <p className="font-medium">{uploadedFile.name}</p>
+                  <p className="text-blue-600 text-xs">{formatFileSize(uploadedFile.size)}</p>
+                </div>
               </div>
               <button
                 onClick={() => setUploadedFile(null)}
