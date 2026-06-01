@@ -10,12 +10,14 @@ const authRoutes = require('./auth');
 const authMiddleware = require('./middleware/auth');
 const { getAuthUrl, oauth2Client, getDriveService, listFiles, createFolder, deleteFile } = require('./googleDrive');
 const { askDriveAI } = require('./gemini');
+const ChatFileProcessor = require('./services/chatFileProcessor');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50gb' }));
+app.use(express.urlencoded({ limit: '50gb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Log de toutes les requêtes entrantes
@@ -29,7 +31,7 @@ app.use((req, res, next) => {
 // Routes d'authentification (register, login, reset-password, change-password)
 app.use('/api/auth', authRoutes);
 
-// Configuration Multer
+// Configuration Multer - Support large files up to 50GB
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     const userId = req.user.id;
@@ -41,7 +43,13 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + '-' + file.originalname);
   }
 });
-const upload = multer({ storage });
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024 * 1024 // 50GB
+  }
+});
 
 // Google Auth URL
 app.get('/api/google/auth-url', authMiddleware, (req, res) => {
@@ -192,24 +200,33 @@ app.post('/api/ai/chat', authMiddleware, upload.single('file'), async (req, res)
   let fileContext = null;
 
   try {
-    // If file is uploaded
+    // If file is uploaded, extract content
     if (req.file) {
       const { filename, mimetype, path: filePath } = req.file;
-      let fileContent = '';
 
-      // Read file content based on type
-      if (mimetype.includes('text') || mimetype.includes('json') || mimetype.includes('xml')) {
-        fileContent = fs.readFileSync(filePath, 'utf8');
-      } else {
-        fileContent = `[Fichier binaire: ${filename}]`;
+      try {
+        const extraction = await ChatFileProcessor.extractContent(filePath, mimetype, filename);
+
+        fileContext = {
+          name: filename,
+          type: mimetype,
+          size: req.file.size,
+          content: extraction.content,
+          metadata: extraction.metadata
+        };
+
+        console.log(`✅ File content extracted successfully`);
+      } catch (extractionError) {
+        console.error('File extraction error:', extractionError.message);
+        // Don't fail the request, just note the error
+        fileContext = {
+          name: filename,
+          type: mimetype,
+          size: req.file.size,
+          content: `[File could not be processed: ${extractionError.message}]`,
+          metadata: { error: extractionError.message }
+        };
       }
-
-      fileContext = {
-        name: filename,
-        type: mimetype,
-        size: req.file.size,
-        content: fileContent
-      };
     }
 
     const parsedHistory = typeof history === 'string' ? JSON.parse(history) : (history || []);
