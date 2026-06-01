@@ -1,51 +1,52 @@
-const axios = require('axios');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = 'gemini-2.0-flash';
-const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const MODEL = 'gemini-2.5-flash';
 
-const askDriveAI = async (prompt, history, fileContext) => {
-  // Construire l'historique au format Gemini
-  let contents = history
+if (!GEMINI_API_KEY) {
+  throw new Error('Erreur : La variable GEMINI_API_KEY n\'est pas définie dans votre fichier .env.');
+}
+
+const ai = new GoogleGenerativeAI(GEMINI_API_KEY);
+const model = ai.getGenerativeModel({ model: MODEL });
+
+const askDriveAI = async (prompt, history = [], fileContext) => {
+  const conversationHistory = history
     .filter(m => m.role === 'user' || m.role === 'assistant')
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: m.content }]
     }));
 
-  // Gemini exige que le premier message soit 'user'
-  while (contents.length > 0 && contents[0].role !== 'user') {
-    contents.shift();
-  }
+  const fullPrompt = fileContext
+    ? `[Fichier: ${fileContext.name}]\n\n${prompt}`
+    : prompt;
 
-  // Ajouter le prompt avec contexte fichier
-  let fullPrompt = prompt;
-  if (fileContext) {
-    fullPrompt = `[Fichier: ${fileContext.name}]\n\n${prompt}`;
-  }
-  contents.push({ role: 'user', parts: [{ text: fullPrompt }] });
+  const chat = model.startChat({ history: conversationHistory });
 
   try {
-    const response = await axios.post(API_URL, { contents }, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 30000,
-    });
-    const text = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.log(`✅ Réponse Gemini obtenue`);
-    return text || "Pas de réponse générée.";
+    const response = await chat.sendMessage(fullPrompt);
+    const text = response?.response?.candidates?.[0]?.content?.parts
+      ?.filter(part => part.text)
+      .map(part => part.text)
+      .join(' ')
+      .trim();
+
+    console.log('✅ Réponse Gemini obtenue');
+    return text || 'Pas de réponse générée.';
   } catch (err) {
     const status = err.response?.status;
     const msg = err.response?.data?.error?.message || err.message;
     console.error(`❌ Gemini Error (${status}):`, msg);
 
     if (status === 429) {
-      return "⏳ Le quota d'appels Gemini est temporairement atteint. Réessayez dans environ 1 minute.";
+      return '⏳ Le quota d\'appels Gemini est temporairement atteint. Réessayez dans environ 1 minute.';
     }
     if (status === 400) {
-      return "❌ Requête invalide. Vérifiez votre clé API Gemini.";
+      return '❌ Requête invalide. Vérifiez votre clé API Gemini.';
     }
-    return "Une erreur est survenue avec l'IA. Réessayez dans un instant.";
+    return 'Une erreur est survenue avec l\'IA. Réessayez dans un instant.';
   }
 };
 
