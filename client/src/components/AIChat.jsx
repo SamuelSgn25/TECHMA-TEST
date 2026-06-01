@@ -1,148 +1,266 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot, Paperclip, X, FileCheck, Sparkles, ArrowUp } from 'lucide-react';
+import { Send, Upload, X, Loader, MessageSquare, Sparkles, Paperclip, FileText } from 'lucide-react';
 import axios from 'axios';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const AIChat = ({ files }) => {
-  const [messages, setMessages] = useState([
-    { role: 'assistant', content: "Comment puis-je vous aider aujourd'hui ?" }
-  ]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedContext, setSelectedContext] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [dragActive, setDragActive] = useState(false);
   const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   useEffect(scrollToBottom, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadedFile({ name: file.name, size: file.size, type: file.type, file });
+    }
+  };
 
-    const userMessage = { role: 'user', content: input };
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setUploadedFile({ name: file.name, size: file.size, type: file.type, file });
+    }
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() && !uploadedFile) return;
+
+    // Add user message
+    const userMessage = {
+      role: 'user',
+      content: input,
+      file: uploadedFile ? { name: uploadedFile.name, type: uploadedFile.type } : null
+    };
+    
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    setUploadedFile(null);
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/ai/chat', {
-        prompt: input,
-        history: messages,
-        fileContext: selectedContext ? { name: selectedContext.name, path: selectedContext.path } : null
-      });
+      // If file is uploaded, prepare FormData
+      let requestData = { prompt: input, history: messages };
 
-      setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+      if (uploadedFile) {
+        const formData = new FormData();
+        formData.append('prompt', input);
+        formData.append('history', JSON.stringify(messages));
+        formData.append('file', uploadedFile.file);
+
+        const response = await axios.post('/api/ai/chat', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+
+        setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+      } else {
+        const response = await axios.post('/api/ai/chat', requestData);
+        setMessages(prev => [...prev, { role: 'assistant', content: response.data.response }]);
+      }
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, une erreur est survenue lors de l'analyse." }]);
+      console.error('Chat error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: "Désolé, une erreur est survenue. Veuillez réessayer."
+      }]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-white text-slate-800">
-      {/* Zone des messages (centrée comme ChatGPT) */}
-      <div className="flex-1 overflow-y-auto w-full max-w-3xl mx-auto px-4 py-8 space-y-8">
-        {messages.map((msg, idx) => (
-          <motion.div
-            key={idx}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            {msg.role === 'assistant' && (
-              <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 shrink-0">
-                <Bot size={18} className="text-premium-accent" />
-              </div>
-            )}
-            <div className={`max-w-[85%] rounded-2xl px-5 py-3 ${
-              msg.role === 'user' 
-                ? 'bg-slate-100 text-slate-900 rounded-tr-none' 
-                : 'bg-transparent border-none text-slate-700 leading-relaxed'
-            }`}>
-              {msg.role === 'assistant' && idx === 0 && <span className="font-bold block mb-2 text-premium-accent">Drive AI</span>}
-              <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+    <div className="flex flex-col h-full bg-white">
+      {/* Messages Container */}
+      <div className="flex-1 overflow-y-auto w-full">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-center px-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-premium-accent/10 to-purple-100 rounded-3xl flex items-center justify-center mb-6">
+              <MessageSquare className="text-premium-accent" size={32} />
             </div>
-            {msg.role === 'user' && (
-              <div className="w-8 h-8 rounded-full bg-premium-dark text-white flex items-center justify-center shrink-0">
-                <User size={18} />
-              </div>
-            )}
-          </motion.div>
-        ))}
-        {isLoading && (
-          <div className="flex gap-5 animate-pulse">
-            <div className="w-8 h-8 rounded-full border border-slate-200 bg-slate-50 flex items-center justify-center">
-              <Bot size={18} className="text-slate-300" />
+            <h1 className="text-4xl font-bold text-slate-900 mb-3">Drive AI Assistant</h1>
+            <p className="text-slate-500 max-w-md mb-8">Posez des questions sur vos fichiers, analysez leur contenu, ou demandez des résumés et explications.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 w-full max-w-2xl">
+              {[
+                { icon: Sparkles, label: 'Résumé du fichier', prompt: 'Résume ce fichier en points clés' },
+                { icon: Paperclip, label: 'Questions rapides', prompt: 'Quels sont les éléments importants?' },
+              ].map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setInput(item.prompt)}
+                  className="p-4 rounded-2xl border border-slate-100 hover:border-premium-accent hover:bg-premium-accent/5 transition-all text-left"
+                >
+                  <item.icon className="text-premium-accent mb-2" size={20} />
+                  <p className="font-semibold text-slate-900 text-sm">{item.label}</p>
+                </button>
+              ))}
             </div>
-            <div className="h-10 w-24 bg-slate-50 rounded-2xl" />
+          </div>
+        ) : (
+          <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+            <AnimatePresence>
+              {messages.map((msg, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-premium-accent to-purple-600 flex items-center justify-center text-white shrink-0 mt-1">
+                      <Sparkles size={16} />
+                    </div>
+                  )}
+
+                  <div className={`max-w-2xl ${msg.role === 'user' ? 'text-right' : ''}`}>
+                    {msg.file && (
+                      <div className="mb-2 inline-flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 text-xs text-slate-600">
+                        <FileText size={14} />
+                        {msg.file.name}
+                      </div>
+                    )}
+                    <div className={`rounded-2xl px-4 py-3 ${
+                      msg.role === 'user'
+                        ? 'bg-premium-accent text-white rounded-tr-none'
+                        : 'bg-slate-50 text-slate-900 rounded-tl-none border border-slate-100'
+                    }`}>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                  </div>
+
+                  {msg.role === 'user' && (
+                    <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0 mt-1">
+                      <Send size={16} />
+                    </div>
+                  )}
+                </motion.div>
+              ))}
+
+              {isLoading && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex gap-4 justify-start"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-premium-accent to-purple-600 flex items-center justify-center text-white shrink-0">
+                    <Loader size={16} className="animate-spin" />
+                  </div>
+                  <div className="bg-slate-50 rounded-2xl rounded-tl-none px-4 py-3 border border-slate-100">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-100"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-200"></div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
         <div ref={chatEndRef} />
       </div>
 
-      {/* Barre d'input (minimaliste ChatGPT-style) */}
-      <div className="w-full max-w-3xl mx-auto px-4 pb-10">
-        <div className="relative bg-slate-50 rounded-[28px] border border-slate-200 focus-within:border-slate-300 transition-all p-2">
-          {/* Fichier de contexte attaché */}
-          {selectedContext && (
-            <div className="absolute -top-12 left-2 flex items-center gap-2 bg-slate-900 text-white px-4 py-1.5 rounded-full text-xs animate-in slide-in-from-bottom-2">
-              <FileCheck size={14} />
-              <span className="max-w-[200px] truncate">{selectedContext.name}</span>
-              <button onClick={() => setSelectedContext(null)} className="ml-1 hover:text-red-400">
-                <X size={14} />
+      {/* Input Area */}
+      <div className="border-t border-slate-100 bg-white px-4 py-4">
+        <div className="max-w-4xl mx-auto">
+          {/* File Upload Display */}
+          {uploadedFile && (
+            <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+              <div className="flex items-center gap-2 text-sm text-blue-700">
+                <FileText size={16} />
+                <span className="font-medium">{uploadedFile.name}</span>
+                <span className="text-blue-600">({(uploadedFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+              </div>
+              <button
+                onClick={() => setUploadedFile(null)}
+                className="text-blue-600 hover:text-blue-700"
+              >
+                <X size={18} />
               </button>
             </div>
           )}
 
-          {/* Sélecteur de contexte (bouton trombone) */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-end gap-2 pr-2">
-              <div className="flex-1 flex flex-col">
-                <textarea
-                  rows="1"
-                  placeholder="Posez une question..."
-                  className="w-full bg-transparent px-4 py-3 focus:outline-none resize-none text-[15px] max-h-48 scrollbar-hide"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                />
-              </div>
+          {/* Chat Input */}
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`relative rounded-2xl border-2 transition-all ${
+              dragActive
+                ? 'border-premium-accent bg-premium-accent/5'
+                : 'border-slate-200 hover:border-slate-300 bg-white'
+            }`}
+          >
+            <div className="flex items-end gap-2 p-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-premium-accent transition-colors"
+                title="Upload a file"
+              >
+                <Upload size={20} />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+
+              <textarea
+                placeholder="Ask me anything or upload a file..."
+                className="flex-1 bg-transparent px-2 py-2 focus:outline-none resize-none max-h-32 text-sm"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                rows="1"
+              />
+
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || isLoading}
-                className={`p-2.5 rounded-full transition-all ${
-                  input.trim() && !isLoading 
-                    ? 'bg-premium-dark text-white shadow-lg' 
+                disabled={(!input.trim() && !uploadedFile) || isLoading}
+                className={`p-2 rounded-lg transition-all ${
+                  (input.trim() || uploadedFile) && !isLoading
+                    ? 'bg-premium-accent text-white hover:shadow-lg'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                <ArrowUp size={20} />
+                <Send size={20} />
               </button>
             </div>
-            
-            <div className="flex items-center gap-2 px-2 pb-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
-              <span className="text-[10px] uppercase font-bold text-slate-400 mr-2 flex items-center gap-1">
-                <Paperclip size={12} /> Contexte :
-              </span>
-              {files.slice(0, 5).map(file => (
-                <button
-                  key={file.id}
-                  onClick={() => setSelectedContext(file)}
-                  className={`text-[11px] px-3 py-1 rounded-full border transition-all ${
-                    selectedContext?.id === file.id 
-                      ? 'bg-premium-accent text-white border-premium-accent' 
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'
-                  }`}
-                >
-                  {file.name}
-                </button>
-              ))}
-            </div>
           </div>
+
+          <p className="text-xs text-slate-500 mt-2 text-center">
+            Drive AI peut faire des erreurs. Envisagez de vérifier les informations importantes.
+          </p>
         </div>
-        <p className="text-center text-[11px] text-slate-400 mt-4 flex items-center justify-center gap-1">
-          Drive AI peut faire des erreurs. Envisagez de vérifier les informations importantes.
-        </p>
       </div>
     </div>
   );
